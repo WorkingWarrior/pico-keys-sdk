@@ -2829,6 +2829,8 @@
  */
 #define MBEDTLS_SHA256_C
 
+#define MBEDTLS_SHA3_C
+
 /**
  * \def MBEDTLS_SHA256_USE_A64_CRYPTO_IF_PRESENT
  *

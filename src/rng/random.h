@@ -22,6 +22,10 @@
 #include <stdlib.h>
 #include <stdint.h>
 
+#define MAX_RANDOM_BUFFER   (1024)
+#define RANDOM_BYTES_LENGTH (32)
+#define RANDOM_WORDS_COUNT  (RANDOM_BYTES_LENGTH / sizeof(uint32_t))
+
 void random_init(void);
 
 /* 32-byte random bytes */

@@ -138,6 +138,7 @@ set(MBEDTLS_SOURCES
     ${CMAKE_CURRENT_LIST_DIR}/mbedtls/library/rsa.c
     ${CMAKE_CURRENT_LIST_DIR}/mbedtls/library/rsa_alt_helpers.c
     ${CMAKE_CURRENT_LIST_DIR}/mbedtls/library/sha1.c
+    ${CMAKE_CURRENT_LIST_DIR}/mbedtls/library/sha3.c
     ${CMAKE_CURRENT_LIST_DIR}/mbedtls/library/sha256.c
     ${CMAKE_CURRENT_LIST_DIR}/mbedtls/library/sha512.c
     ${CMAKE_CURRENT_LIST_DIR}/mbedtls/library/chachapoly.c
@@ -161,6 +162,7 @@ set(SOURCES ${SOURCES}
     ${CMAKE_CURRENT_LIST_DIR}/src/fs/low_flash.c
     ${CMAKE_CURRENT_LIST_DIR}/src/fs/otp.c
     ${CMAKE_CURRENT_LIST_DIR}/src/fs/phy.c
+    ${CMAKE_CURRENT_LIST_DIR}/src/ringbuffer/ringbuffer.c
     ${CMAKE_CURRENT_LIST_DIR}/src/rng/random.c
     ${CMAKE_CURRENT_LIST_DIR}/src/rng/hwrng.c
     ${CMAKE_CURRENT_LIST_DIR}/src/eac.c
@@ -191,6 +193,7 @@ set(INCLUDES ${INCLUDES}
     ${CMAKE_CURRENT_LIST_DIR}/src
     ${CMAKE_CURRENT_LIST_DIR}/src/usb
     ${CMAKE_CURRENT_LIST_DIR}/src/fs
+    ${CMAKE_CURRENT_LIST_DIR}/src/ringbuffer
     ${CMAKE_CURRENT_LIST_DIR}/src/rng
     ${CMAKE_CURRENT_LIST_DIR}/src/led
     ${CMAKE_CURRENT_LIST_DIR}/mbedtls/include

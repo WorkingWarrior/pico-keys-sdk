@@ -15,81 +15,81 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-
 #include <stdint.h>
 #include <string.h>
 
 #include "hwrng.h"
+#include "random.h"
 
-#define RANDOM_BYTES_LENGTH 32
-static uint32_t random_word[RANDOM_BYTES_LENGTH / sizeof(uint32_t)];
+static uint32_t random_word[RANDOM_WORDS_COUNT];
 
-void random_init(void) {
-    int i;
-
-    neug_init(random_word, RANDOM_BYTES_LENGTH / sizeof(uint32_t));
-
-    for (i = 0; i < NEUG_PRE_LOOP; i++) {
-        neug_get();
-    }
+void random_init(void)
+{
+    hwrng_init(random_word, RANDOM_WORDS_COUNT);
 }
 
 /*
  * Return pointer to random 32-byte
  */
-void random_bytes_free(const uint8_t *p);
-#define MAX_RANDOM_BUFFER 1024
-const uint8_t *random_bytes_get(size_t len) {
-    if (len > MAX_RANDOM_BUFFER) {
+const uint8_t *random_bytes_get(size_t len)
+{
+    if (len > MAX_RANDOM_BUFFER)
+    {
         return NULL;
     }
     static uint32_t return_word[MAX_RANDOM_BUFFER / sizeof(uint32_t)];
-    for (size_t ix = 0; ix < len; ix += RANDOM_BYTES_LENGTH) {
-        neug_wait_full();
+    for (size_t ix = 0; ix < len; ix += RANDOM_BYTES_LENGTH)
+    {
+        hwrng_wait_buffer_full();
         memcpy(return_word + ix / sizeof(uint32_t), random_word, RANDOM_BYTES_LENGTH);
-        random_bytes_free((const uint8_t *) random_word);
+        random_bytes_free((const uint8_t *)random_word);
     }
-    return (const uint8_t *) return_word;
+    return (const uint8_t *)return_word;
 }
 
 /*
  * Free pointer to random 32-byte
  */
-void random_bytes_free(const uint8_t *p) {
-    (void) p;
+void random_bytes_free(const uint8_t *p)
+{
+    (void)p;
     memset(random_word, 0, RANDOM_BYTES_LENGTH);
-    neug_flush();
+    hwrng_flush();
 }
-
 
 /*
  * Random byte iterator
  */
-int random_gen(void *arg, unsigned char *out, size_t out_len) {
-    uint8_t *index_p = (uint8_t *) arg;
+int random_gen(void *arg, unsigned char *out, size_t out_len)
+{
+    uint8_t *index_p = (uint8_t *)arg;
     uint8_t index = index_p ? *index_p : 0;
     uint8_t n;
 
-    while (out_len) {
-        neug_wait_full();
+    while (out_len)
+    {
+        hwrng_wait_buffer_full();
 
         n = RANDOM_BYTES_LENGTH - index;
-        if (n > out_len) {
+        if (n > out_len)
+        {
             n = (uint8_t)out_len;
         }
 
-        memcpy(out, ((unsigned char *) random_word) + index, n);
+        memcpy(out, ((unsigned char *)random_word) + index, n);
         out += n;
         out_len -= n;
         index += n;
 
-        if (index >= RANDOM_BYTES_LENGTH) {
+        if (index >= RANDOM_BYTES_LENGTH)
+        {
             index = 0;
-            neug_flush();
+            hwrng_flush();
         }
     }
 
-    if (index_p) {
+    if (index_p)
+    {
         *index_p = index;
     }
 
