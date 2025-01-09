@@ -15,12 +15,13 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include "file.h"
-#include "pico_keys.h"
 #include <string.h>
 #include <stdio.h>
+#include "file.h"
+#include "pico_keys.h"
 #include "asn1.h"
 #include "apdu.h"
+#include "flash_file_system.h"
 
 extern const uintptr_t end_data_pool;
 extern const uintptr_t start_data_pool;

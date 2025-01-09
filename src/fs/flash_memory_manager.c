@@ -18,8 +18,9 @@
 #include <stdint.h>
 #include <stdlib.h>
 #include <stdio.h>
-#include "pico_keys.h"
 #include <string.h>
+#include "pico_keys.h"
+#include "flash_file_system.h"
 
 #ifdef PICO_PLATFORM
     #include "pico/stdlib.h"
