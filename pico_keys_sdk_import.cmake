@@ -159,7 +159,7 @@ set(SOURCES ${SOURCES}
     ${CMAKE_CURRENT_LIST_DIR}/src/usb/usb.c
     ${CMAKE_CURRENT_LIST_DIR}/src/fs/file.c
     ${CMAKE_CURRENT_LIST_DIR}/src/fs/flash.c
-    ${CMAKE_CURRENT_LIST_DIR}/src/fs/low_flash.c
+    ${CMAKE_CURRENT_LIST_DIR}/src/fs/flash_memory_manager.c
     ${CMAKE_CURRENT_LIST_DIR}/src/fs/otp.c
     ${CMAKE_CURRENT_LIST_DIR}/src/fs/phy.c
     ${CMAKE_CURRENT_LIST_DIR}/src/ringbuffer/ringbuffer.c
