@@ -1,3 +1,4 @@
+/* phy.c */
 /*
  * This file is part of the Pico Keys SDK distribution (https://github.com/polhenarejos/pico-keys-sdk).
  * Copyright (c) 2022 Pol Henarejos.
@@ -15,6 +16,7 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include <stdio.h>
 #include "pico_keys.h"
 #include "file.h"
 
@@ -26,7 +28,9 @@ int phy_serialize_data(const phy_data_t *phy, uint8_t *data, uint16_t *len) {
     if (!phy || !data || !len) {
         return PICOKEY_ERR_NULL_PARAM;
     }
+
     uint8_t *p = data;
+
     if (phy->vidpid_present) {
         *p++ = PHY_VIDPID;
         *p++ = phy->vidpid[1];
@@ -34,20 +38,25 @@ int phy_serialize_data(const phy_data_t *phy, uint8_t *data, uint16_t *len) {
         *p++ = phy->vidpid[3];
         *p++ = phy->vidpid[2];
     }
+
     if (phy->led_gpio_present) {
         *p++ = PHY_LED_GPIO;
         *p++ = phy->led_gpio;
     }
+
     if (phy->led_brightness_present) {
         *p++ = PHY_LED_BTNESS;
         *p++ = phy->led_brightness;
     }
+
     *p++ = PHY_OPTS;
     p += put_uint16_t_be(phy->opts, p);
+
     if (phy->up_btn_present) {
         *p++ = PHY_UP_BTN;
         *p++ = phy->up_btn;
     }
+
     if (phy->usb_product_present) {
         *p++ = PHY_USB_PRODUCT;
         strcpy((char *)p, phy->usb_product);
@@ -58,13 +67,15 @@ int phy_serialize_data(const phy_data_t *phy, uint8_t *data, uint16_t *len) {
     *len = p - data;
     return PICOKEY_OK;
 }
-#include <stdio.h>
+
 int phy_unserialize_data(const uint8_t *data, uint16_t len, phy_data_t *phy) {
     if (!phy || !data || !len) {
         return PICOKEY_ERR_NULL_PARAM;
     }
+
     memset(phy, 0, sizeof(phy_data_t));
     const uint8_t *p = data;
+
     while (p < data + len) {
         switch (*p++) {
             case PHY_VIDPID:
@@ -75,22 +86,27 @@ int phy_unserialize_data(const uint8_t *data, uint16_t len, phy_data_t *phy) {
                 phy->vidpid[2] = *p++;
                 phy->vidpid_present = true;
                 break;
+
             case PHY_LED_GPIO:
                 phy->led_gpio = *p++;
                 phy->led_gpio_present = true;
                 break;
+
             case PHY_LED_BTNESS:
                 phy->led_brightness = *p++;
                 phy->led_brightness_present = true;
                 break;
+
             case PHY_OPTS:
                 phy->opts = get_uint16_t_be(p);
                 p += 2;
                 break;
+
             case PHY_UP_BTN:
                 phy->up_btn = *p++;
                 phy->up_btn_present = true;
                 break;
+
             case PHY_USB_PRODUCT:
                 memset(phy->usb_product, 0, sizeof(phy->usb_product));
                 strlcpy(phy->usb_product, (const char *)p, sizeof(phy->usb_product));
@@ -104,6 +120,7 @@ int phy_unserialize_data(const uint8_t *data, uint16_t len, phy_data_t *phy) {
 
 int phy_init() {
     memset(&phy_data, 0, sizeof(phy_data_t));
+
     if (file_has_data(ef_phy)) {
         const uint8_t *data = file_get_data(ef_phy);
         int ret = phy_unserialize_data(data, file_get_size(ef_phy), &phy_data);
@@ -114,4 +131,5 @@ int phy_init() {
 
     return PICOKEY_OK;
 }
+
 #endif
