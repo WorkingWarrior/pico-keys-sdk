@@ -154,6 +154,13 @@ set(MBEDTLS_SOURCES
     ${CMAKE_CURRENT_LIST_DIR}/mbedtls/library/pkwrite.c
 )
 
+set(CRYPTO_SOURCES
+    ${CMAKE_CURRENT_LIST_DIR}/src/crypto_utils/src/crypto_aes.c
+    ${CMAKE_CURRENT_LIST_DIR}/src/crypto_utils/src/crypto_hash.c
+    ${CMAKE_CURRENT_LIST_DIR}/src/crypto_utils/src/crypto_curves.c
+    ${CMAKE_CURRENT_LIST_DIR}/src/crypto_utils/src/crypto_utils.c
+)
+
 set(SOURCES ${SOURCES}
     ${CMAKE_CURRENT_LIST_DIR}/src/main.c
     ${CMAKE_CURRENT_LIST_DIR}/src/usb/usb.c
@@ -166,7 +173,7 @@ set(SOURCES ${SOURCES}
     ${CMAKE_CURRENT_LIST_DIR}/src/rng/random.c
     ${CMAKE_CURRENT_LIST_DIR}/src/rng/hwrng.c
     ${CMAKE_CURRENT_LIST_DIR}/src/eac.c
-    ${CMAKE_CURRENT_LIST_DIR}/src/crypto_utils.c
+    ${CRYPTO_SOURCES}
     ${CMAKE_CURRENT_LIST_DIR}/src/asn1.c
     ${CMAKE_CURRENT_LIST_DIR}/src/apdu.c
     ${CMAKE_CURRENT_LIST_DIR}/src/rescue.c
@@ -190,6 +197,7 @@ if(NOT ENABLE_EMULATION AND NOT APPLE)
     )
 endif()
 set(INCLUDES ${INCLUDES}
+    ${CMAKE_CURRENT_LIST_DIR}/src/crypto_utils/include
     ${CMAKE_CURRENT_LIST_DIR}/src
     ${CMAKE_CURRENT_LIST_DIR}/src/usb
     ${CMAKE_CURRENT_LIST_DIR}/src/fs
