@@ -1,4 +1,3 @@
-/* otp.h */
 /*
  * This file is part of the Pico Keys SDK distribution (https://github.com/polhenarejos/pico-keys-sdk).
  * Copyright (c) 2022 Pol Henarejos.
@@ -19,6 +18,27 @@
 #ifndef _OTP_H_
 #define _OTP_H_
 
+#include <stddef.h>
+
+/* Key configuration */
+#define OTP_KEY_SIZE               32    /* Size of OTP keys in bytes */
+#define OTP_MAX_KEYS               2     /* Maximum number of OTP keys */
+
+/* Error codes */
+#define OTP_SUCCESS                0
+#define OTP_ERROR_WRITE           -1
+#define OTP_ERROR_READ            -2
+#define OTP_ERROR_INVALID_PARAM   -3
+#define OTP_ERROR_LOCKED          -4
+
+/* Key indices */
+#define OTP_KEY_INDEX_MKEK        0
+#define OTP_KEY_INDEX_DEVK        1
+
+/* Security settings */
+#define OTP_SECURE_BOOT_KEY_SIZE  32
+#define OTP_MAX_BOOT_KEYS         8
+
 #ifdef PICO_RP2350
     /* RP2040 specific definitions */
     #define OTP_MKEK_ROW     0x0EF0
@@ -28,9 +48,9 @@
 
     extern uint8_t* otp_buffer(uint16_t row);
     extern uint8_t* otp_buffer_raw(uint16_t row);
-    extern bool is_empty_otp_buffer(uint16_t row, uint16_t len);
-    extern int otp_write_data(uint16_t row, uint8_t *data, uint16_t len);
-    extern int otp_write_data_raw(uint16_t row, uint8_t *data, uint16_t len);
+    extern bool is_empty_otp_buffer(uint16_t row, size_t len);
+    extern int otp_write_data(uint16_t row, uint8_t *data, size_t len);
+    extern int otp_write_data_raw(uint16_t row, uint8_t *data, size_t len);
 
 #elif defined(ESP_PLATFORM)
     /* ESP32 specific definitions */

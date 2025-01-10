@@ -17,6 +17,9 @@
  */
 
 #include <stdio.h>
+#include <stdint.h>
+#include <stdbool.h>
+#include <stddef.h>
 #include "file.h"
 #include "pico_keys.h"
 #include "otp.h"
@@ -43,7 +46,7 @@ const uint8_t *otp_key_2 = NULL;
     typedef int otp_ret_t;
     #define OTP_WRITE(ROW, DATA, LEN)     otp_write_data(ROW, DATA, LEN)
     #define OTP_READ(ROW, PTR)            do { PTR = otp_buffer(ROW); } while(0)
-    #define OTP_EMTPY(ROW, LEN)           is_empty_otp_buffer(ROW, LEN)
+    #define OTP_EMPTY(ROW, LEN)           is_empty_otp_buffer(ROW, LEN)
 #elif defined(ESP_PLATFORM)
     typedef esp_err_t otp_ret_t;
     #define OTP_WRITE(ROW, DATA, LEN)     esp_efuse_write_key(ROW, ESP_EFUSE_KEY_PURPOSE_USER, DATA, LEN)
@@ -52,7 +55,7 @@ const uint8_t *otp_key_2 = NULL;
                                             if (ret != ESP_OK) { printf("Error reading OTP key 1 [%d]\n", ret); } \
                                             PTR = _##PTR; \
                                          } while(0)
-    #define OTP_EMTPY(ROW, LEN)           esp_efuse_key_block_unused(ROW)
+    #define OTP_EMPTY(ROW, LEN)           esp_efuse_key_block_unused(ROW)
 #endif
 
 #ifndef SECURE_BOOT_BOOTKEY_INDEX
@@ -62,16 +65,38 @@ const uint8_t *otp_key_2 = NULL;
 /* RP2040-specific functions */
 #ifdef PICO_RP2350
 
-static bool is_empty_buffer(const uint8_t *buffer, uint16_t buffer_len) {
-    for (int i = 0; i < buffer_len; i++) {
-        if (buffer[i] != 0x00) {
+/**
+ * @brief Checks if the buffer contains only zeros
+ * 
+ * This function iterates through the provided buffer and checks if all the bytes are zero.
+ * 
+ * @param buffer Pointer to the buffer to check
+ * @param buffer_len Buffer length in bytes
+ * @return true if buffer contains only zeros
+ * @return false if buffer contains any non-zero values
+ */
+static inline bool is_empty_buffer(const uint8_t *buffer, size_t buffer_len) {
+    if (buffer == NULL || buffer_len == 0) {
+        return false;
+    }
+    const uint32_t *buf32 = (const uint32_t *)buffer;
+    const size_t words = buffer_len >> 2;
+    const size_t rem = buffer_len & 0x03;
+    for (size_t i = 0; i < words; i++) {
+        if (buf32[i] != 0) {
+            return false;
+        }
+    }
+    const uint8_t *rem_ptr = (const uint8_t *)&buf32[words];
+    for (size_t i = 0; i < rem; i++) {
+        if (rem_ptr[i] != 0) {
             return false;
         }
     }
     return true;
 }
 
-static int otp_write_data_mode(uint16_t row, uint8_t *data, uint16_t len, bool is_ecc) {
+static int otp_write_data_mode(uint16_t row, uint8_t *data, size_t len, bool is_ecc) {
     otp_cmd_t cmd = {
         .flags = row | (is_ecc ? OTP_CMD_ECC_BITS : 0) | OTP_CMD_WRITE_BITS
     };
@@ -82,11 +107,11 @@ static int otp_write_data_mode(uint16_t row, uint8_t *data, uint16_t len, bool i
     return ret;
 }
 
-int otp_write_data(uint16_t row, uint8_t *data, uint16_t len) {
+int otp_write_data(uint16_t row, uint8_t *data, size_t len) {
     return otp_write_data_mode(row, data, len, true);
 }
 
-int otp_write_data_raw(uint16_t row, uint8_t *data, uint16_t len) {
+int otp_write_data_raw(uint16_t row, uint8_t *data, size_t len) {
     return otp_write_data_mode(row, data, len, false);
 }
 
@@ -100,7 +125,7 @@ uint8_t* otp_buffer_raw(uint16_t row) {
     return (uint8_t *)p;
 }
 
-bool is_empty_otp_buffer(uint16_t row, uint16_t len) {
+bool is_empty_otp_buffer(uint16_t row, size_t len) {
     return is_empty_buffer(otp_buffer(row), len);
 }
 
@@ -134,23 +159,30 @@ esp_err_t read_key_from_efuse(esp_efuse_block_t block, uint8_t *key, size_t key_
 
 /* Common implementation */
 int otp_enable_secure_boot(uint8_t bootkey, bool secure_lock) {
-    int ret = 0;
+    if (bootkey >= OTP_MAX_BOOT_KEYS) {
+        return OTP_ERROR_INVALID_PARAM;
+    }
 
 #ifdef PICO_RP2350
-    static const uint8_t BOOTKEY[] = {
+    static const uint8_t BOOTKEY[OTP_SECURE_BOOT_KEY_SIZE] = {
         0xE1, 0xD1, 0x6B, 0xA7, 0x64, 0xAB, 0xD7, 0x12,
         0xD4, 0xEF, 0x6E, 0x3E, 0xDD, 0x74, 0x4E, 0xD5,
         0x63, 0x8C, 0x26, 0x0B, 0x77, 0x1C, 0xF9, 0x81,
         0x51, 0x11, 0x0B, 0xAF, 0xAC, 0x9B, 0xC8, 0x71
     };
 
-    if (is_empty_otp_buffer(OTP_DATA_BOOTKEY0_0_ROW + 0x10 * bootkey, 32)) {
-        PICOKEY_CHECK(otp_write_data(OTP_DATA_BOOTKEY0_0_ROW + 0x10 * bootkey, BOOTKEY, sizeof(BOOTKEY)));
+    int ret = OTP_SUCCESS;
+    const uint16_t bootkey_row = OTP_DATA_BOOTKEY0_0_ROW + (OTP_SECURE_BOOT_KEY_SIZE/2) * bootkey;
+
+    if (is_empty_otp_buffer(bootkey_row, OTP_SECURE_BOOT_KEY_SIZE)) {
+        ret = otp_write_data(bootkey_row, (uint8_t*)BOOTKEY, OTP_SECURE_BOOT_KEY_SIZE);
+        if (ret != OTP_SUCCESS) {
+            return ret;
+        }
     }
 
-    /* Configure boot flags */
     uint8_t *boot_flags1 = otp_buffer_raw(OTP_DATA_BOOT_FLAGS1_ROW);
-    uint8_t flagsb1[] = {
+    uint8_t flagsb1[4] = {
         boot_flags1[0] | (1 << (bootkey + OTP_DATA_BOOT_FLAGS1_KEY_VALID_LSB)),
         boot_flags1[1],
         boot_flags1[2],
@@ -158,17 +190,25 @@ int otp_enable_secure_boot(uint8_t bootkey, bool secure_lock) {
     };
 
     if (secure_lock) {
-        flagsb1[1] |= ((OTP_DATA_BOOT_FLAGS1_KEY_INVALID_BITS >> OTP_DATA_BOOT_FLAGS1_KEY_INVALID_LSB) & 
+        flagsb1[1] |= ((OTP_DATA_BOOT_FLAGS1_KEY_INVALID_BITS >> 
+                       OTP_DATA_BOOT_FLAGS1_KEY_INVALID_LSB) & 
                       (~(1 << bootkey)));
     }
 
-    PICOKEY_CHECK(otp_write_data_raw(OTP_DATA_BOOT_FLAGS1_ROW, flagsb1, sizeof(flagsb1)));
-    PICOKEY_CHECK(otp_write_data_raw(OTP_DATA_BOOT_FLAGS1_R1_ROW, flagsb1, sizeof(flagsb1)));
-    PICOKEY_CHECK(otp_write_data_raw(OTP_DATA_BOOT_FLAGS1_R2_ROW, flagsb1, sizeof(flagsb1)));
+    const uint16_t boot_flag_rows[] = {
+        OTP_DATA_BOOT_FLAGS1_ROW,
+        OTP_DATA_BOOT_FLAGS1_R1_ROW,
+        OTP_DATA_BOOT_FLAGS1_R2_ROW
+    };
 
-    /* Configure critical settings */
+    for (size_t i = 0; i < sizeof(boot_flag_rows)/sizeof(boot_flag_rows[0]); i++) {
+        if ((ret = otp_write_data_raw(boot_flag_rows[i], flagsb1, sizeof(flagsb1))) != OTP_SUCCESS) {
+            return ret;
+        }
+    }
+
     uint8_t *crit1 = otp_buffer_raw(OTP_DATA_CRIT1_ROW);
-    uint8_t flagsc1[] = {
+    uint8_t flagsc1[4] = {
         crit1[0] | (1 << OTP_DATA_CRIT1_SECURE_BOOT_ENABLE_LSB),
         crit1[1],
         crit1[2],
@@ -181,97 +221,122 @@ int otp_enable_secure_boot(uint8_t bootkey, bool secure_lock) {
         flagsc1[0] |= (3 << OTP_DATA_CRIT1_GLITCH_DETECTOR_SENS_LSB);
     }
 
-    /* Write critical settings to all redundant locations */
-    PICOKEY_CHECK(otp_write_data_raw(OTP_DATA_CRIT1_ROW, flagsc1, sizeof(flagsc1)));
-    PICOKEY_CHECK(otp_write_data_raw(OTP_DATA_CRIT1_R1_ROW, flagsc1, sizeof(flagsc1)));
-    PICOKEY_CHECK(otp_write_data_raw(OTP_DATA_CRIT1_R2_ROW, flagsc1, sizeof(flagsc1)));
-    PICOKEY_CHECK(otp_write_data_raw(OTP_DATA_CRIT1_R3_ROW, flagsc1, sizeof(flagsc1)));
-    PICOKEY_CHECK(otp_write_data_raw(OTP_DATA_CRIT1_R4_ROW, flagsc1, sizeof(flagsc1)));
-    PICOKEY_CHECK(otp_write_data_raw(OTP_DATA_CRIT1_R5_ROW, flagsc1, sizeof(flagsc1)));
-    PICOKEY_CHECK(otp_write_data_raw(OTP_DATA_CRIT1_R6_ROW, flagsc1, sizeof(flagsc1)));
-    PICOKEY_CHECK(otp_write_data_raw(OTP_DATA_CRIT1_R7_ROW, flagsc1, sizeof(flagsc1)));
+    const uint16_t crit_rows[] = {
+        OTP_DATA_CRIT1_ROW,
+        OTP_DATA_CRIT1_R1_ROW,
+        OTP_DATA_CRIT1_R2_ROW,
+        OTP_DATA_CRIT1_R3_ROW,
+        OTP_DATA_CRIT1_R4_ROW,
+        OTP_DATA_CRIT1_R5_ROW,
+        OTP_DATA_CRIT1_R6_ROW,
+        OTP_DATA_CRIT1_R7_ROW
+    };
+
+    for (size_t i = 0; i < sizeof(crit_rows)/sizeof(crit_rows[0]); i++) {
+        if ((ret = otp_write_data_raw(crit_rows[i], flagsc1, sizeof(flagsc1))) != OTP_SUCCESS) {
+            return ret;
+        }
+    }
 
     if (secure_lock) {
-        /* Lock page 1 */
         uint8_t *page1 = otp_buffer_raw(OTP_DATA_PAGE1_LOCK1_ROW);
         uint8_t page1v = page1[0] | (OTP_DATA_PAGE1_LOCK1_LOCK_BL_VALUE_READ_ONLY << 
                                     OTP_DATA_PAGE1_LOCK1_LOCK_BL_LSB);
-        uint8_t flagsp1[] = { page1v, page1v, page1v, 0x00 };
-        PICOKEY_CHECK(otp_write_data_raw(OTP_DATA_PAGE1_LOCK1_ROW, flagsp1, sizeof(flagsp1)));
+        uint8_t flagsp1[4] = { page1v, page1v, page1v, 0x00 };
+        if ((ret = otp_write_data_raw(OTP_DATA_PAGE1_LOCK1_ROW, flagsp1, sizeof(flagsp1))) != OTP_SUCCESS) {
+            return ret;
+        }
 
-        /* Lock page 2 */
         uint8_t *page2 = otp_buffer_raw(OTP_DATA_PAGE2_LOCK1_ROW);
         uint8_t page2v = page2[0] | (OTP_DATA_PAGE2_LOCK1_LOCK_BL_VALUE_READ_ONLY << 
                                     OTP_DATA_PAGE2_LOCK1_LOCK_BL_LSB);
-        uint8_t flagsp2[] = { page2v, page2v, page2v, 0x00 };
-        PICOKEY_CHECK(otp_write_data_raw(OTP_DATA_PAGE2_LOCK1_ROW, flagsp2, sizeof(flagsp2)));
+        uint8_t flagsp2[4] = { page2v, page2v, page2v, 0x00 };
+        if ((ret = otp_write_data_raw(OTP_DATA_PAGE2_LOCK1_ROW, flagsp2, sizeof(flagsp2))) != OTP_SUCCESS) {
+            return ret;
+        }
     }
+
 #elif defined(ESP_PLATFORM)
-    // TODO: Implement secure boot for ESP32-S3
 #endif
 
-    err:
-    if (ret != PICOKEY_OK) {
-        return ret;
+    return OTP_SUCCESS;
+}
+
+#if defined(PICO_RP2350) || defined(ESP_PLATFORM)
+
+static void generate_random_key(uint8_t *key, size_t key_size) {
+    random_gen(NULL, key, key_size);
+}
+
+static void generate_secp256k1_key(uint8_t *key, size_t key_size) {
+    mbedtls_ecdsa_context ecdsa;
+    size_t olen = 0;
+    
+    while (olen != 32) {
+        mbedtls_ecdsa_init(&ecdsa);
+        mbedtls_ecp_group_id ec_id = MBEDTLS_ECP_DP_SECP256K1;
+        mbedtls_ecdsa_genkey(&ecdsa, ec_id, random_gen, NULL);
+        mbedtls_ecp_write_key_ext(&ecdsa, &olen, key, key_size);
+        mbedtls_ecdsa_free(&ecdsa);
     }
-    return PICOKEY_OK;
+}
+
+static void lock_otp_entry(uint16_t otp_index) {
+#if defined(PICO_RP2350)
+    otp_lock_page(otp_index >> 6);
+#elif defined(ESP_PLATFORM)
+    otp_ret_t ret;
+    ret = esp_efuse_set_key_dis_write(otp_index);
+    if (ret != ESP_OK) {
+        printf("Error setting OTP key %d to read only [%d]\n", otp_index, ret);
+    }
+    ret = esp_efuse_set_keypurpose_dis_write(otp_index);
+    if (ret != ESP_OK) {
+        printf("Error setting OTP key %d purpose to read only [%d]\n", otp_index, ret);
+    }
+#endif
+}
+
+static bool initialize_otp_key(uint16_t key_index, void (*key_generator)(uint8_t*, size_t)) {
+    if (key_index >= OTP_MAX_KEYS) {
+        return false;
+    }
+    
+    if (OTP_EMPTY(key_index, OTP_KEY_SIZE)) {
+        uint8_t key[OTP_KEY_SIZE] = {0};
+        key_generator(key, OTP_KEY_SIZE);
+        
+        otp_ret_t ret = OTP_WRITE(key_index, key, OTP_KEY_SIZE);
+        if (ret != OTP_SUCCESS) {
+            printf("Error writing OTP key %d [%d]\n", key_index, ret);
+            return false;
+        }
+        return true;
+    }
+    return false;
 }
 
 void init_otp_files(void) {
-#if defined(PICO_RP2350) || defined(ESP_PLATFORM)
-    otp_ret_t ret = 0;
-    uint16_t write_otp[2] = {0xFFFF, 0xFFFF};
+    uint16_t write_otp[OTP_MAX_KEYS] = {0xFFFF, 0xFFFF};
 
-    /* Initialize Key 1 */
-    if (OTP_EMTPY(OTP_KEY_1, 32)) {
-        uint8_t mkek[32] = {0};
-        random_gen(NULL, mkek, sizeof(mkek));
-        ret = OTP_WRITE(OTP_KEY_1, mkek, sizeof(mkek));
-        if (ret != 0) {
-            printf("Error writing OTP key 1 [%d]\n", ret);
-        }
-        write_otp[0] = OTP_KEY_1;
+    // Initialize MKEK
+    if (initialize_otp_key(OTP_KEY_INDEX_MKEK, generate_random_key)) {
+        write_otp[OTP_KEY_INDEX_MKEK] = OTP_KEY_1;
     }
     OTP_READ(OTP_KEY_1, otp_key_1);
 
-    /* Initialize Key 2 */
-    if (OTP_EMTPY(OTP_KEY_2, 32)) {
-        mbedtls_ecdsa_context ecdsa;
-        size_t olen = 0;
-        uint8_t pkey[MBEDTLS_ECP_MAX_BYTES];
-
-        while (olen != 32) {
-            mbedtls_ecdsa_init(&ecdsa);
-            mbedtls_ecp_group_id ec_id = MBEDTLS_ECP_DP_SECP256K1;
-            mbedtls_ecdsa_genkey(&ecdsa, ec_id, random_gen, NULL);
-            mbedtls_ecp_write_key_ext(&ecdsa, &olen, pkey, sizeof(pkey));
-            mbedtls_ecdsa_free(&ecdsa);
-        }
-
-        ret = OTP_WRITE(OTP_KEY_2, pkey, olen);
-        if (ret != 0) {
-            printf("Error writing OTP key 2 [%d]\n", ret);
-        }
-        write_otp[1] = OTP_KEY_2;
+    // Initialize DEVK
+    if (initialize_otp_key(OTP_KEY_INDEX_DEVK, generate_secp256k1_key)) {
+        write_otp[OTP_KEY_INDEX_DEVK] = OTP_KEY_2;
     }
     OTP_READ(OTP_KEY_2, otp_key_2);
 
-    /* Lock written OTP entries */
-    for (int i = 0; i < sizeof(write_otp)/sizeof(uint16_t); i++) {
+    // Lock written OTP entries
+    for (int i = 0; i < OTP_MAX_KEYS; i++) {
         if (write_otp[i] != 0xFFFF) {
-    #if defined(PICO_RP2350)
-            otp_lock_page(write_otp[i] >> 6);
-    #elif defined(ESP_PLATFORM)
-            ret = esp_efuse_set_key_dis_write(write_otp[i]);
-            if (ret != ESP_OK) {
-                printf("Error setting OTP key %d to read only [%d]\n", i, ret);
-            }
-            ret = esp_efuse_set_keypurpose_dis_write(write_otp[i]);
-            if (ret != ESP_OK) {
-                printf("Error setting OTP key %d purpose to read only [%d]\n", i, ret);
-            }
-    #endif
+            lock_otp_entry(write_otp[i]);
         }
     }
-#endif
 }
+
+#endif
